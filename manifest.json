@@ -1,0 +1,27 @@
+{
+  "name": "ロト7予想通知",
+  "short_name": "ロト7予想",
+  "description": "過去の当選番号の統計分析に基づいてロト7の予想数字を生成するアプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#D4AF37",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "images/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "images/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment", "utilities"],
+  "lang": "ja",
+  "dir": "ltr"
+}

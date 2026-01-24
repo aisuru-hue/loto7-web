@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ロト7の過去当選番号の統計分析に基づいて予想数字を生成するWebアプリ">
+  <meta name="theme-color" content="#D4AF37">
+  <title>ロト7予想通知</title>
+  <link rel="icon" type="image/png" href="images/favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ロト7予想">
+  <link rel="apple-touch-icon" href="images/icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- ヘッダー -->
+  <header class="header">
+    <h1>ロト7予想</h1>
+    <p>統計分析に基づく予想数字</p>
+  </header>
+
+  <!-- ナビゲーション -->
+  <nav class="nav">
+    <button class="nav-btn active" data-page="home">ホーム</button>
+    <button class="nav-btn" data-page="stats">統計</button>
+    <button class="nav-btn" data-page="settings">設定</button>
+  </nav>
+
+  <main class="container">
+    <!-- ホームページ -->
+    <div id="home-page" class="page active">
+      <!-- 予想数字カード -->
+      <div class="card">
+        <h2 class="card-title" style="text-align: center;">今週の予想数字</h2>
+        <div id="prediction-balls" class="number-balls"></div>
+        <p id="generated-at" class="generated-at"></p>
+      </div>
+
+      <!-- 生成ボタン -->
+      <button id="generate-btn" class="btn btn-primary" style="margin-bottom: 16px;">
+        新しい予想を生成
+      </button>
+
+      <!-- 次回抽選日 -->
+      <div class="card next-draw">
+        <h3 class="card-title">次回抽選日</h3>
+        <div id="next-draw-date" class="draw-date"></div>
+        <div id="next-draw-round" class="draw-round"></div>
+      </div>
+
+      <!-- 予想の根拠 -->
+      <div class="card">
+        <h3 class="card-title">予想の根拠</h3>
+        <div class="info-row">
+          <span class="info-label">分析データ数</span>
+          <span id="stats-data-count" class="info-value"></span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">平均奇数/偶数比</span>
+          <span id="stats-odd-even" class="info-value"></span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">平均合計値</span>
+          <span id="stats-avg-sum" class="info-value"></span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">よく出る数字</span>
+          <span id="stats-hot-numbers" class="info-value"></span>
+        </div>
+      </div>
+
+      <!-- 直近の当選番号 -->
+      <div class="card">
+        <h3 id="latest-draw-round" class="card-title"></h3>
+        <div id="latest-draw-numbers" class="number-balls"></div>
+        <p class="generated-at">※グレーはボーナス数字</p>
+      </div>
+    </div>
+
+    <!-- 統計ページ -->
+    <div id="stats-page" class="page">
+      <!-- よく出る数字 -->
+      <div class="card">
+        <h3 class="card-title">よく出る数字（上位10個）</h3>
+        <div id="hot-numbers-balls" class="number-balls"></div>
+      </div>
+
+      <!-- あまり出ない数字 -->
+      <div class="card">
+        <h3 class="card-title">あまり出ない数字（下位10個）</h3>
+        <div id="cold-numbers-balls" class="number-balls"></div>
+      </div>
+
+      <!-- 出現頻度グラフ -->
+      <div class="card">
+        <h3 class="card-title">数字別出現頻度</h3>
+        <div id="frequency-chart" class="frequency-chart"></div>
+      </div>
+
+      <!-- 奇数/偶数比率 -->
+      <div class="card">
+        <h3 class="card-title">奇数/偶数比率の分布</h3>
+        <div id="ratio-chart" class="ratio-chart"></div>
+        <p class="notice" style="margin-top: 12px;">※4:3と3:4が最も多く出現（合計約60%）</p>
+      </div>
+
+      <!-- 過去の当選番号履歴 -->
+      <div class="card">
+        <h3 class="card-title">過去の当選番号（直近10回）</h3>
+        <div id="history-list"></div>
+      </div>
+    </div>
+
+    <!-- 設定ページ -->
+    <div id="settings-page" class="page">
+      <!-- アラート表示エリア -->
+      <div id="alert-container"></div>
+
+      <!-- メールアドレス設定 -->
+      <div class="card">
+        <h3 class="card-title">メールアドレス</h3>
+        
+        <!-- 保存済みメール表示 -->
+        <div id="saved-email-display" style="display: none;">
+          <div class="form-input" style="margin-bottom: 12px; background: var(--background);">
+            <span id="saved-email-text"></span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="edit-email-btn" class="btn btn-secondary" style="flex: 1;">変更</button>
+            <button id="delete-email-btn" class="btn btn-secondary" style="flex: 1; border-color: var(--error); color: var(--error);">削除</button>
+          </div>
+        </div>
+        
+        <!-- メール入力フォーム -->
+        <div id="email-form">
+          <div class="form-group">
+            <input 
+              type="email" 
+              id="email-input" 
+              class="form-input" 
+              placeholder="example@email.com"
+              autocomplete="email"
+            >
+          </div>
+          <button id="save-email-btn" class="btn btn-primary">保存</button>
+        </div>
+      </div>
+
+      <!-- 通知設定 -->
+      <div class="card">
+        <h3 class="card-title">通知設定</h3>
+        <div class="switch-row">
+          <div class="switch-label">
+            <div class="switch-title">メール通知</div>
+            <div class="switch-desc">毎週土曜日12:00に予想数字をメールで受け取る</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="notification-switch">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        
+        <div id="notification-info" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+          <div class="info-row">
+            <span class="info-label">次回の通知予定</span>
+            <span id="next-notification-date" class="info-value"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- アプリ情報 -->
+      <div class="card">
+        <h3 class="card-title">アプリ情報</h3>
+        <div class="info-row">
+          <span class="info-label">アプリ名</span>
+          <span class="info-value">ロト7予想通知</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">バージョン</span>
+          <span class="info-value">1.0.0</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">データ更新</span>
+          <span class="info-value">第659回まで</span>
+        </div>
+      </div>
+
+      <!-- 注意事項 -->
+      <div class="card">
+        <h3 class="card-title">ご注意</h3>
+        <p class="notice">
+          本アプリの予想数字は過去の当選番号の統計分析に基づいて生成されていますが、
+          当選を保証するものではありません。宝くじは適度に楽しみましょう。
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <!-- フッター -->
+  <footer class="footer">
+    <p>ロト7予想通知 © 2026</p>
+  </footer>
+
+  <!-- スクリプト -->
+  <script src="js/loto7-data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Service Workerの登録
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((registration) => {
+            console.log('SW registered:', registration.scope);
+          })
+          .catch((error) => {
+            console.log('SW registration failed:', error);
+          });
+      });
+    }
+  </script>
+</body>
+</html>
