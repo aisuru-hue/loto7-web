@@ -4,6 +4,10 @@
 
 // 過去の当選番号データ（最新50回分）
 const historicalData = [
+  { round: 663, numbers: [4, 6, 10, 11, 13, 17, 23], bonus: [25, 32] },
+  { round: 662, numbers: [4, 14, 15, 21, 22, 24, 37], bonus: [5, 20] },
+  { round: 661, numbers: [7, 12, 17, 22, 31, 34, 35], bonus: [20, 32] },
+  { round: 660, numbers: [4, 6, 12, 13, 16, 17,31], bonus: [14, 20] },
   { round: 659, numbers: [2, 8, 9, 14, 27, 34, 36], bonus: [5, 18] },
   { round: 658, numbers: [10, 12, 16, 18, 19, 22, 37], bonus: [11, 20] },
   { round: 657, numbers: [9, 11, 16, 23, 27, 29, 32], bonus: [6, 24] },
@@ -50,10 +54,6 @@ const historicalData = [
   { round: 616, numbers: [7, 15, 20, 28, 29, 34, 36], bonus: [1, 35] },
   { round: 615, numbers: [4, 11, 21, 26, 27, 28, 33], bonus: [10, 13] },
   { round: 614, numbers: [14, 21, 22, 23, 24, 28, 34], bonus: [5, 37] },
-  { round: 613, numbers: [3, 5, 6, 10, 19, 21, 35], bonus: [13, 27] },
-  { round: 612, numbers: [3, 6, 11, 12, 19, 23, 37], bonus: [16, 32] },
-  { round: 611, numbers: [3, 5, 9, 11, 24, 29, 35], bonus: [6, 34] },
-  { round: 610, numbers: [2, 5, 7, 10, 12, 16, 33], bonus: [4, 35] },
 ];
 
 // ロト7のルール
