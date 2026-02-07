@@ -1,7 +1,7 @@
 /**
  * ロト7予想通知 バックエンドサーバー
  * - メール送信機能（Resend API）
- * - データ自動更新機能
+ * - 当選番号自動取得機能
  * - 定期実行スケジューラー
  */
 
@@ -10,7 +10,7 @@ const cors = require('cors');
 const { Resend } = require('resend');
 const fs = require('fs');
 const path = require('path');
-const { getLatestData } = require('./scraper');
+const Loto7Scheduler = require('./scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -22,8 +22,12 @@ const resend = new Resend(process.env.RESEND_API_KEY || 're_QGAU4Y9v_7nyLGDGKNgk
 app.use(cors());
 app.use(express.json());
 
+// ロト7スケジューラーのインスタンス
+const scheduler = new Loto7Scheduler();
+
 // 購読者データの保存先
 const SUBSCRIBERS_FILE = path.join(__dirname, 'subscribers.json');
+const LOTO7_DATA_FILE = path.join(__dirname, 'loto7-data.json');
 
 // 購読者データの読み込み
 function loadSubscribers() {
@@ -42,7 +46,19 @@ function saveSubscribers(subscribers) {
   fs.writeFileSync(SUBSCRIBERS_FILE, JSON.stringify(subscribers, null, 2));
 }
 
-// ロト7予想数字生成ロジック
+// ロト7データの読み込み
+function loadLoto7Data() {
+  try {
+    if (fs.existsSync(LOTO7_DATA_FILE)) {
+      return JSON.parse(fs.readFileSync(LOTO7_DATA_FILE, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error loading loto7 data:', error);
+  }
+  return [];
+}
+
+// ロト7予想数字生成ロジック（改善版）
 function generatePrediction() {
   // 過去データに基づく出現頻度（簡略版）
   const frequencyWeights = {
@@ -234,19 +250,41 @@ app.post('/api/send-all', async (req, res) => {
 });
 
 // API: 最新の当選番号を取得
-app.get('/api/latest', async (req, res) => {
+app.get('/api/latest-data', (req, res) => {
   try {
-    const forceRefresh = req.query.refresh === 'true';
-    const data = await getLatestData(forceRefresh);
+    const data = loadLoto7Data();
     
-    if (data) {
-      res.json(data);
+    if (data.length > 0) {
+      res.json({
+        success: true,
+        data: data,
+        lastUpdate: fs.statSync(LOTO7_DATA_FILE).mtime,
+        count: data.length
+      });
     } else {
-      res.status(404).json({ error: 'No data available' });
+      res.status(404).json({ success: false, error: 'No data available' });
     }
   } catch (error) {
     console.error('Latest data error:', error);
-    res.status(500).json({ error: 'Failed to fetch latest data' });
+    res.status(500).json({ success: false, error: 'Failed to fetch latest data' });
+  }
+});
+
+// API: スケジューラーのステータスを取得
+app.get('/api/scheduler-status', (req, res) => {
+  const status = scheduler.getStatus();
+  res.json(status);
+});
+
+// API: 手動でデータを更新
+app.post('/api/update-data', async (req, res) => {
+  try {
+    console.log('Manual data update requested');
+    await scheduler.updateNow();
+    res.json({ success: true, message: 'Data update completed' });
+  } catch (error) {
+    console.error('Manual update error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -255,11 +293,28 @@ app.use(express.static(path.join(__dirname, '..')));
 
 // サーバー起動
 app.listen(PORT, () => {
+  console.log(`\n========================================`);
+  console.log(`ロト7予想通知 バックエンドサーバー`);
+  console.log(`========================================`);
   console.log(`Server running on port ${PORT}`);
-  console.log(`API endpoints:`);
+  console.log(`\nAPI endpoints:`);
   console.log(`  POST /api/subscribe - Subscribe to notifications`);
   console.log(`  POST /api/unsubscribe - Unsubscribe from notifications`);
   console.log(`  GET  /api/prediction - Get prediction numbers`);
   console.log(`  POST /api/send-test - Send test email`);
   console.log(`  POST /api/send-all - Send to all subscribers`);
+  console.log(`  GET  /api/latest-data - Get latest loto7 data`);
+  console.log(`  GET  /api/scheduler-status - Get scheduler status`);
+  console.log(`  POST /api/update-data - Manually update data`);
+  console.log(`\n========================================\n`);
+
+  // スケジューラーを開始
+  scheduler.start();
+});
+
+// グレースフルシャットダウン
+process.on('SIGINT', () => {
+  console.log('\nShutting down gracefully...');
+  scheduler.stop();
+  process.exit(0);
 });
