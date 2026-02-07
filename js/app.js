@@ -1,5 +1,5 @@
 /**
- * ロト7予想通知 Webアプリ メインスクリプト
+ * ロト7予想通知 Webアプリ メインスクリプト（改善版）
  */
 
 // APIエンドポイント
@@ -21,6 +21,7 @@ const state = {
   generatedAt: null,
   email: '',
   notificationEnabled: false,
+  serverDataAvailable: false,
 };
 
 // DOM要素
@@ -44,32 +45,37 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 async function fetchLatestData() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/latest`);
+    console.log('サーバーから最新データを取得中...');
+    const response = await fetch(`${API_BASE_URL}/api/latest-data`);
     if (response.ok) {
-      const data = await response.json();
+      const result = await response.json();
       
-      // 新しいデータがあれば更新
-      if (data && data.round) {
-        const existingRound = Loto7.historicalData[0]?.round || 0;
+      if (result.success && result.data && result.data.length > 0) {
+        console.log('✓ サーバーから最新データを取得しました');
+        console.log(`  最新回: 第${result.data[0].round}回`);
+        console.log(`  保持データ: ${result.count}回分`);
         
-        if (data.round > existingRound) {
-          // 新しいデータを先頭に追加
-          Loto7.historicalData.unshift({
-            round: data.round,
-            date: data.date,
-            numbers: data.numbers,
-            bonus: data.bonus
-          });
-          
-          console.log('New draw data added:', data);
+        // サーバーのデータをローカルデータと比較
+        const existingRound = Loto7.historicalData[0]?.round || 0;
+        const serverLatestRound = result.data[0].round;
+        
+        if (serverLatestRound > existingRound) {
+          console.log(`✓ 新しいデータがあります（第${existingRound}回 → 第${serverLatestRound}回）`);
+          // サーバーのデータを使用
+          Loto7.historicalData = result.data;
+          state.serverDataAvailable = true;
           
           // ページを再描画
           renderCurrentPage();
+        } else {
+          console.log('✓ ローカルデータが最新です');
+          state.serverDataAvailable = true;
         }
       }
     }
   } catch (error) {
-    console.log('Could not fetch latest data:', error.message);
+    console.log('ℹ サーバーからのデータ取得に失敗（ローカルデータを使用）:', error.message);
+    state.serverDataAvailable = false;
     // オフラインでも動作を続行
   }
 }
@@ -364,29 +370,22 @@ function renderFrequencyChart(frequency) {
  * 奇数/偶数比率グラフの描画
  */
 function renderRatioChart(ratios) {
-  // 比率の分布を計算
-  const distribution = new Map();
-  ratios.forEach(r => {
-    const key = `${r.odd}:${r.even}`;
-    distribution.set(key, (distribution.get(key) || 0) + 1);
-  });
-  
-  const sortedRatios = Array.from(distribution.entries())
-    .sort((a, b) => b[1] - a[1]);
-  
   elements.ratioChart.innerHTML = '';
   
-  sortedRatios.forEach(([ratio, count]) => {
-    const percentage = (count / ratios.length) * 100;
-    
+  const totalDraws = Object.values(ratios).reduce((sum, count) => sum + count, 0);
+  
+  Object.entries(ratios).forEach(([ratio, count]) => {
     const row = document.createElement('div');
     row.className = 'ratio-row';
+    
+    const percentage = (count / totalDraws) * 100;
+    
     row.innerHTML = `
       <span class="ratio-label">${ratio}</span>
       <div class="ratio-bar-container">
         <div class="ratio-bar" style="width: ${percentage}%"></div>
       </div>
-      <span class="ratio-percent">${percentage.toFixed(1)}%</span>
+      <span class="ratio-percentage">${percentage.toFixed(1)}%</span>
     `;
     
     elements.ratioChart.appendChild(row);
@@ -399,88 +398,54 @@ function renderRatioChart(ratios) {
 function renderHistoryList() {
   elements.historyList.innerHTML = '';
   
-  Loto7.historicalData.slice(0, 10).forEach(draw => {
+  Loto7.historicalData.slice(0, 20).forEach((draw, index) => {
     const item = document.createElement('div');
     item.className = 'history-item';
     
-    const roundLabel = document.createElement('div');
-    roundLabel.className = 'history-round';
-    roundLabel.textContent = `第${draw.round}回`;
+    const numbersStr = draw.numbers.map(n => String(n).padStart(2, '0')).join(' ');
+    const bonusStr = draw.bonus.map(n => String(n).padStart(2, '0')).join(' ');
     
-    const numbersContainer = document.createElement('div');
-    numbersContainer.className = 'history-numbers';
+    item.innerHTML = `
+      <div class="history-round">第${draw.round}回</div>
+      <div class="history-numbers">${numbersStr}</div>
+      <div class="history-bonus">ボーナス: ${bonusStr}</div>
+    `;
     
-    draw.numbers.forEach(num => {
-      numbersContainer.appendChild(createNumberBall(num, false, true));
-    });
-    
-    draw.bonus.forEach(num => {
-      numbersContainer.appendChild(createNumberBall(num, true, true));
-    });
-    
-    item.appendChild(roundLabel);
-    item.appendChild(numbersContainer);
     elements.historyList.appendChild(item);
   });
 }
 
 /**
- * 予想生成ハンドラ
+ * 予想数字生成ハンドラー
  */
-async function handleGeneratePrediction() {
-  elements.generateBtn.disabled = true;
-  elements.generateBtn.textContent = '生成中...';
+function handleGeneratePrediction() {
+  const prediction = Loto7.generatePrediction();
   
-  // ローディング表示
-  elements.predictionBalls.innerHTML = `
-    <div class="loading">
-      <div class="spinner"></div>
-      <div class="loading-text">生成中...</div>
-    </div>
-  `;
-  
-  // 少し遅延を入れてアニメーション効果
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  // 予想生成
-  state.prediction = Loto7.generatePrediction();
+  state.prediction = prediction;
   state.generatedAt = new Date();
   
-  // 保存
+  // ローカルストレージに保存
   localStorage.setItem(STORAGE_KEYS.PREDICTION, JSON.stringify({
-    numbers: state.prediction,
-    generatedAt: state.generatedAt.toISOString(),
+    numbers: prediction,
+    generatedAt: state.generatedAt.toISOString()
   }));
   
-  // 描画
+  // ページを再描画
   renderHomePage();
-  
-  elements.generateBtn.disabled = false;
-  elements.generateBtn.textContent = '新しい予想を生成';
 }
 
 /**
- * メール保存ハンドラ
+ * メール保存ハンドラー
  */
 async function handleSaveEmail() {
   const email = elements.emailInput.value.trim();
   
-  if (!email) {
-    showAlert('メールアドレスを入力してください', 'error');
-    return;
-  }
-  
-  if (!validateEmail(email)) {
+  if (!email || !email.includes('@')) {
     showAlert('有効なメールアドレスを入力してください', 'error');
     return;
   }
   
-  // ボタンを無効化
-  elements.saveEmailBtn.disabled = true;
-  elements.saveEmailBtn.textContent = '登録中...';
-  
   try {
-    // サーバーに購読登録
     const response = await fetch(`${API_BASE_URL}/api/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -492,81 +457,59 @@ async function handleSaveEmail() {
     if (response.ok) {
       state.email = email;
       localStorage.setItem(STORAGE_KEYS.EMAIL, email);
-      showAlert('メールアドレスを登録しました。ウェルカムメールを送信しました！', 'success');
+      showAlert('メールアドレスを保存しました。ウェルカムメールをお送りしました。', 'success');
+      renderSettingsPage();
     } else {
-      // 既に登録済みの場合もローカルに保存
-      if (result.error === 'Email already subscribed') {
-        state.email = email;
-        localStorage.setItem(STORAGE_KEYS.EMAIL, email);
-        showAlert('このメールアドレスは既に登録されています', 'info');
-      } else {
-        showAlert(result.error || '登録に失敗しました', 'error');
-      }
+      showAlert(result.error || 'エラーが発生しました', 'error');
     }
   } catch (error) {
-    console.error('Subscribe error:', error);
-    // オフラインでもローカルに保存
-    state.email = email;
-    localStorage.setItem(STORAGE_KEYS.EMAIL, email);
-    showAlert('メールアドレスを保存しました（オフラインモード）', 'success');
-  } finally {
-    elements.saveEmailBtn.disabled = false;
-    elements.saveEmailBtn.textContent = '登録する';
+    showAlert('サーバーに接続できません: ' + error.message, 'error');
   }
-  
-  renderSettingsPage();
 }
 
 /**
- * メール削除ハンドラ
+ * メール削除ハンドラー
  */
 async function handleDeleteEmail() {
-  if (!confirm('登録されているメールアドレスを削除しますか？')) {
+  if (!confirm('メールアドレスを削除してもよろしいですか？')) {
     return;
   }
   
   try {
-    // サーバーから購読解除
-    await fetch(`${API_BASE_URL}/api/unsubscribe`, {
+    const response = await fetch(`${API_BASE_URL}/api/unsubscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: state.email })
     });
+    
+    if (response.ok) {
+      state.email = '';
+      state.notificationEnabled = false;
+      localStorage.removeItem(STORAGE_KEYS.EMAIL);
+      localStorage.removeItem(STORAGE_KEYS.NOTIFICATION);
+      showAlert('メールアドレスを削除しました', 'success');
+      renderSettingsPage();
+    } else {
+      showAlert('削除に失敗しました', 'error');
+    }
   } catch (error) {
-    console.error('Unsubscribe error:', error);
+    showAlert('サーバーに接続できません: ' + error.message, 'error');
   }
-  
-  state.email = '';
-  state.notificationEnabled = false;
-  localStorage.removeItem(STORAGE_KEYS.EMAIL);
-  localStorage.setItem(STORAGE_KEYS.NOTIFICATION, 'false');
-  
-  showAlert('メールアドレスを削除しました', 'success');
-  renderSettingsPage();
 }
 
 /**
- * 通知切り替えハンドラ
+ * 通知トグルハンドラー
  */
 function handleToggleNotification() {
-  const enabled = elements.notificationSwitch.checked;
-  
-  if (enabled && !state.email) {
-    elements.notificationSwitch.checked = false;
-    showAlert('通知を有効にするには、まずメールアドレスを登録してください', 'error');
-    return;
-  }
-  
-  state.notificationEnabled = enabled;
-  localStorage.setItem(STORAGE_KEYS.NOTIFICATION, enabled.toString());
-  
+  state.notificationEnabled = elements.notificationSwitch.checked;
+  localStorage.setItem(STORAGE_KEYS.NOTIFICATION, state.notificationEnabled);
   renderSettingsPage();
 }
 
 /**
  * アラート表示
  */
-function showAlert(message, type) {
+function showAlert(message, type = 'info') {
   const alert = document.createElement('div');
   alert.className = `alert alert-${type}`;
   alert.textContent = message;
@@ -580,24 +523,21 @@ function showAlert(message, type) {
 }
 
 /**
- * メールアドレスのバリデーション
- */
-function validateEmail(email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
-
-/**
  * 日付フォーマット
  */
 function formatDate(date) {
-  const days = ['日', '月', '火', '水', '木', '金', '土'];
-  return `${date.getMonth() + 1}月${date.getDate()}日（${days[date.getDay()]}）`;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}年${month}月${day}日`;
 }
 
 /**
  * 日時フォーマット
  */
 function formatDateTime(date) {
-  return date.toLocaleString('ja-JP');
+  const dateStr = formatDate(date);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${dateStr} ${hours}:${minutes}`;
 }
